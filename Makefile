@@ -1,9 +1,10 @@
 CLUSTER  ?= skillpulse
 NAMESPACE ?= skillpulse
+ARGOCD_NAMESPACE ?= argocd
 BACKEND_IMAGE  ?= trainwithshubham/skillpulse-backend:latest
 FRONTEND_IMAGE ?= trainwithshubham/skillpulse-frontend:latest
 
-.PHONY: up down build load apply status logs mysql restart
+.PHONY: up down build load apply status logs mysql restart monitoring argocd-install argocd-apps argocd-password argocd-port-forward terraform-validate
 
 up: ## One-shot: build images, create cluster, load images, apply manifests
 	$(MAKE) build
@@ -49,3 +50,33 @@ restart: ## Rebuild + reload images, roll backend + frontend
 	kubectl rollout restart deployment/backend deployment/frontend -n $(NAMESPACE)
 	kubectl rollout status  deployment/backend  -n $(NAMESPACE) --timeout=120s
 	kubectl rollout status  deployment/frontend -n $(NAMESPACE) --timeout=60s
+
+monitoring: ## Install Prometheus, Grafana, and Node Exporter
+	kubectl apply -f k8s/monitoring
+	kubectl rollout status deployment/prometheus -n monitoring --timeout=120s
+	kubectl rollout status daemonset/node-exporter -n monitoring --timeout=120s
+	kubectl rollout status deployment/grafana -n monitoring --timeout=120s
+	@echo
+	@echo "  Prometheus: http://localhost:9090"
+	@echo "  Grafana:    http://localhost:3000  (admin / admin123)"
+	@echo
+
+argocd-install: ## Install Argo CD into the cluster
+	kubectl create namespace $(ARGOCD_NAMESPACE) --dry-run=client -o yaml | kubectl apply -f -
+	kubectl apply -n $(ARGOCD_NAMESPACE) -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+	kubectl rollout status deployment/argocd-server -n $(ARGOCD_NAMESPACE) --timeout=180s
+
+argocd-apps: ## Apply Argo CD project and Applications
+	kubectl apply -f k8s/argocd/project.yaml
+	kubectl apply -f k8s/argocd/skillpulse-application.yaml
+	kubectl apply -f k8s/argocd/monitoring-application.yaml
+
+argocd-password: ## Print initial Argo CD admin password
+	kubectl -n $(ARGOCD_NAMESPACE) get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d
+	@echo
+
+argocd-port-forward: ## Forward Argo CD UI to https://localhost:8081
+	kubectl port-forward svc/argocd-server -n $(ARGOCD_NAMESPACE) 8081:443
+
+terraform-validate: ## Format-check and validate Terraform
+	cd terraform/aws && terraform fmt -check -recursive && terraform init -backend=false && terraform validate

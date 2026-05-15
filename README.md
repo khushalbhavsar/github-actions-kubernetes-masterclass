@@ -11,6 +11,90 @@ This repo is the working demo for the **TrainWithShubham GitHub Actions & Kubern
 
 ---
 
+## Production DevOps additions
+
+The project now includes the three portfolio-grade DevOps upgrades most interviewers expect to see around a Kubernetes app:
+
+```text
+Terraform
+    |
+    v
+AWS Infrastructure
+    |
+    v
+GitHub Actions
+    |
+    v
+Docker Hub
+    |
+    v
+Argo CD
+    |
+    v
+Kubernetes Cluster
+    |
+    v
+Prometheus + Grafana
+```
+
+### Terraform infrastructure
+
+Terraform lives in [`terraform/aws`](terraform/aws). It provisions VPC, public subnet, internet gateway, route table, security group, IAM role, instance profile, and an EC2 instance prepared for Docker Compose deployments.
+
+```bash
+cd terraform/aws
+cp terraform.tfvars.example terraform.tfvars
+terraform init
+terraform validate
+terraform plan
+terraform apply
+```
+
+Resume point:
+
+> Automated AWS infrastructure provisioning using Terraform for EC2, VPC, IAM, and networking resources.
+
+### Prometheus + Grafana monitoring
+
+Monitoring manifests live in [`k8s/monitoring`](k8s/monitoring). They install Prometheus, Grafana, and Node Exporter, and the Go backend exposes `/metrics` for API observability.
+
+```bash
+make monitoring
+```
+
+With the provided kind port mappings:
+
+```text
+Prometheus: http://localhost:9090
+Grafana:    http://localhost:3000
+```
+
+If your kind cluster existed before these mappings were added, recreate it with `make down && make up` before using the browser URLs.
+
+Resume point:
+
+> Implemented real-time monitoring and observability using Prometheus and Grafana for Kubernetes workloads and containers.
+
+### Argo CD GitOps
+
+Argo CD manifests live in [`k8s/argocd`](k8s/argocd). They currently point at this repository's GitHub remote. If you fork the project, update `repoURL` in the two Application files, then install Argo CD and apply the GitOps apps:
+
+```bash
+make argocd-install
+make argocd-apps
+make argocd-port-forward
+```
+
+Argo CD syncs the app manifests and monitoring stack from Git, with automated sync and self-heal enabled.
+
+Resume point:
+
+> Implemented GitOps-based Kubernetes deployment using Argo CD with automated synchronization and rollback capabilities.
+
+Full upgrade notes are in [`docs/production-devops-upgrade.md`](docs/production-devops-upgrade.md).
+
+---
+
 ## Why DevOps matters
 
 For most of software's history, the people who *wrote* software and the people who *ran* it were two different teams with two different goals.
@@ -258,6 +342,8 @@ k8s/
   10-mysql.yaml         Secret + ConfigMap (init.sql) + headless Service + StatefulSet + 1Gi PVC
   20-backend.yaml       Deployment + ClusterIP Service, env from Secret, /health probes
   30-frontend.yaml      Deployment + NodePort Service (30080), / probes
+  monitoring/           Prometheus, Grafana, Node Exporter
+  argocd/               Argo CD AppProject and Applications
 ```
 
 ### Useful commands
@@ -268,6 +354,10 @@ k8s/
 | `make logs` | Tail all three workloads at once |
 | `make mysql` | Open a `mysql` shell in the StatefulSet pod |
 | `make restart` | Roll backend + frontend (e.g. after pushing a new image) |
+| `make monitoring` | Install Prometheus, Grafana, and Node Exporter |
+| `make argocd-install` | Install Argo CD |
+| `make argocd-apps` | Apply the Argo CD project and Applications |
+| `make terraform-validate` | Format-check and validate Terraform |
 
 ### Smoke test
 
@@ -296,7 +386,7 @@ This is the **kind chapter** — same app, real Kubernetes primitives, but limit
 
 ## Continuous deployment to the kind cluster
 
-The new CD path doesn't `kubectl apply` from GitHub Actions — your kind cluster lives on your laptop, GitHub can't reach it. Instead, the pipeline takes the GitOps shape: **the repo is the source of truth, your cluster is one `git pull && make apply` away**.
+The Kubernetes CD path is now GitOps-based. GitHub Actions still cannot reach your laptop's kind cluster directly, so it does not run `kubectl apply`. Instead, CI publishes images, `cd-k8s.yml` commits the new image tags into Git, and Argo CD running inside the cluster pulls that desired state.
 
 ```
 git push to main
@@ -306,8 +396,8 @@ CI: build images, push trainwithshubham/skillpulse-{backend,frontend}:{latest,<s
 cd-k8s.yml: sed image: lines in k8s/20-backend.yaml + k8s/30-frontend.yaml
             commit "deploy: pin backend+frontend to <short-sha>" to main as github-actions[bot]
     ↓
-(you, locally):
-    git pull && make apply
+Argo CD:
+    detects the Git commit, syncs k8s/ manifests, keeps the cluster self-healed
     ↓
 kind nodes pull the new :<sha> from Docker Hub → rolling update
 ```
@@ -326,13 +416,13 @@ kind nodes pull the new :<sha> from Docker Hub → rolling update
 4. **Push any code change** (not a `.md`, not under `k8s/` or `docs/` — those are deliberately ignored by CI). Watch the Actions tab:
    - **CI** builds + pushes both images to Docker Hub.
    - **CD (kind cluster — manifest bump)** commits a `deploy: pin backend+frontend to <sha>` change to main.
-5. **Pull and deploy**, on the laptop with the kind cluster:
+5. **Install Argo CD once**, on the laptop with the kind cluster:
    ```bash
-   git pull
-   make apply
+   make argocd-install
+   make argocd-apps
    kubectl get pods -n skillpulse -o wide
    ```
-   You'll see new pods with the bumped image rolling out. mysql untouched.
+   After that, Argo CD detects manifest commits and syncs new pods automatically. mysql stays untouched unless its manifest changes.
 
 ### What about the EC2 path?
 
@@ -354,6 +444,7 @@ backend/                Go service
   main.go               wires routes, reads PORT env
   database/db.go        connects to MySQL with retry-loop
   handlers/             skills, logs, dashboard endpoints
+  metrics/              Prometheus-format API metrics
   models/               request/response structs
 
 frontend/               static UI + Nginx config
@@ -363,28 +454,38 @@ frontend/               static UI + Nginx config
 
 mysql/init.sql          schema + seed data, mounted into the MySQL container
 
+k8s/                    Kubernetes app manifests
+  monitoring/           Prometheus, Grafana, Node Exporter
+  argocd/               Argo CD GitOps project and Applications
+
+terraform/aws/          AWS IaC: VPC, subnet, SG, IAM, EC2
+
 docker-compose.yml      three services: db, backend, frontend
 .env.example            copy to .env
 
 .github/workflows/
   ci.yml                build + push images on every main push
   cd.yml                SSH + redeploy on CI success
+  cd-k8s.yml            GitOps image tag bump for Kubernetes
+  terraform.yml         Terraform fmt/init/validate and optional plan
 ```
 
 ---
 
 ## Where this goes next
 
-This is the **GitHub Actions** half of the masterclass. The pipeline currently deploys to a single EC2 via SSH + docker compose — a fine starting point, and the most common "first real pipeline" in the industry.
+This project now has both learning paths:
 
-The Kubernetes half of the course evolves this same app onto a cluster:
+- The original EC2 path: GitHub Actions builds images and redeploys with SSH + Docker Compose.
+- The Kubernetes path: GitHub Actions publishes images, commits manifest tag updates, and Argo CD syncs the cluster from Git.
 
-- Replace `docker compose` with manifests (Deployment, Service, Ingress).
-- Replace SSH-driven deploys with `kubectl apply` from CI, then with GitOps (Argo CD / Flux).
-- Add health checks, autoscaling, rolling updates with no downtime, secrets via Kubernetes Secrets or external managers.
-- Run the cluster on EKS / GKE / AKS or local (kind / minikube).
+Good next upgrades:
 
-Same app. Same pipeline shape. Different runtime — and a lot more power.
+- Replace NodePort with Ingress and TLS.
+- Move MySQL to RDS for the AWS deployment.
+- Add External Secrets for database and Grafana credentials.
+- Add alerting rules and notification routing for Prometheus.
+- Split Kubernetes manifests into Kustomize overlays for dev, staging, and production.
 
 ---
 

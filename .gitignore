@@ -20,3 +20,15 @@ CLAUDE.md
 # Intermediate PDF render output (regenerated from .md + .css)
 docs/skillpulse-cicd-guide.html
 docs/skillpulse-kubernetes-guide.html
+
+# Terraform local state and plans
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+terraform.tfvars
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
