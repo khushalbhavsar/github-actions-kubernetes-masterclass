@@ -4,7 +4,7 @@ ARGOCD_NAMESPACE ?= argocd
 BACKEND_IMAGE  ?= trainwithshubham/skillpulse-backend:latest
 FRONTEND_IMAGE ?= trainwithshubham/skillpulse-frontend:latest
 
-.PHONY: up down build load apply status logs mysql restart monitoring argocd-install argocd-apps argocd-password argocd-port-forward terraform-validate
+.PHONY: up enterprise-up down build load apply status logs mysql restart monitoring security production falco argocd-install argocd-apps argocd-password argocd-port-forward terraform-validate
 
 up: ## One-shot: build images, create cluster, load images, apply manifests
 	$(MAKE) build
@@ -14,6 +14,15 @@ up: ## One-shot: build images, create cluster, load images, apply manifests
 	@echo
 	@echo "  SkillPulse is live at http://localhost:8888"
 	@echo
+
+enterprise-up: ## Local enterprise stack: app, security, monitoring, Falco, Argo CD
+	$(MAKE) up
+	$(MAKE) security
+	$(MAKE) monitoring
+	$(MAKE) production
+	$(MAKE) falco
+	$(MAKE) argocd-install
+	$(MAKE) argocd-apps
 
 build: ## Build backend + frontend images for the host's architecture
 	docker build -t $(BACKEND_IMAGE)  ./backend
@@ -56,10 +65,22 @@ monitoring: ## Install Prometheus, Grafana, and Node Exporter
 	kubectl rollout status deployment/prometheus -n monitoring --timeout=120s
 	kubectl rollout status daemonset/node-exporter -n monitoring --timeout=120s
 	kubectl rollout status deployment/grafana -n monitoring --timeout=120s
+	kubectl rollout status deployment/alertmanager -n monitoring --timeout=120s
 	@echo
 	@echo "  Prometheus: http://localhost:9090"
+	@echo "  Alertmanager: http://localhost:9093"
 	@echo "  Grafana:    http://localhost:3000  (admin / admin123)"
 	@echo
+
+security: ## Apply NetworkPolicies and Kubernetes security overlays
+	kubectl apply -f k8s/security
+
+production: ## Apply raw production add-ons: Ingress and HPA
+	kubectl apply -f k8s/production
+
+falco: ## Install Falco runtime security monitoring
+	kubectl apply -f k8s/runtime-security
+	kubectl rollout status daemonset/falco -n falco --timeout=180s
 
 argocd-install: ## Install Argo CD into the cluster
 	kubectl create namespace $(ARGOCD_NAMESPACE) --dry-run=client -o yaml | kubectl apply -f -
@@ -70,6 +91,9 @@ argocd-apps: ## Apply Argo CD project and Applications
 	kubectl apply -f k8s/argocd/project.yaml
 	kubectl apply -f k8s/argocd/skillpulse-application.yaml
 	kubectl apply -f k8s/argocd/monitoring-application.yaml
+	kubectl apply -f k8s/argocd/security-application.yaml
+	kubectl apply -f k8s/argocd/production-application.yaml
+	kubectl apply -f k8s/argocd/runtime-security-application.yaml
 
 argocd-password: ## Print initial Argo CD admin password
 	kubectl -n $(ARGOCD_NAMESPACE) get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d

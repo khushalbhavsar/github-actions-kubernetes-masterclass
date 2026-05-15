@@ -5,6 +5,9 @@ This folder contains the GitOps definitions for Argo CD:
 - `project.yaml` creates the `skillpulse` Argo CD project.
 - `skillpulse-application.yaml` syncs the application manifests in `k8s/`.
 - `monitoring-application.yaml` syncs the Prometheus, Grafana, and Node Exporter manifests in `k8s/monitoring/`.
+- `security-application.yaml` syncs NetworkPolicies.
+- `production-application.yaml` syncs raw Ingress and HPA add-ons.
+- `runtime-security-application.yaml` syncs Falco.
 
 ## Install Argo CD
 
@@ -28,6 +31,8 @@ If you fork the project, replace that value in both Application files with your 
 make argocd-apps
 ```
 
+This applies the raw app, monitoring, security, production add-ons, and Falco runtime-security Applications.
+
 ## Access Argo CD
 
 ```bash
@@ -47,3 +52,21 @@ make argocd-password
 ```
 
 Argo CD will auto-sync changes committed to the configured repository. Rollbacks can be done from the Argo CD UI or CLI by selecting an older synced revision.
+
+## GitOps Flow
+
+```text
+GitHub Actions
+    |
+    v
+Docker Hub image push
+    |
+    v
+Manifest image tag commit
+    |
+    v
+Argo CD detects Git drift
+    |
+    v
+Kubernetes rolling update
+```

@@ -13,7 +13,57 @@ This repo is the working demo for the **TrainWithShubham GitHub Actions & Kubern
 
 ## Production DevOps additions
 
-The project now includes the three portfolio-grade DevOps upgrades most interviewers expect to see around a Kubernetes app:
+### Final project flow
+
+```text
+Developer
+    |
+    v
+Git Push to GitHub
+    |
+    v
+GitHub Actions Pipeline
+    |
+    v
+Code Quality & Security Checks
+    |-- SonarQube SAST
+    |-- GitLeaks secret scan
+    |-- Trivy filesystem, config, and container scans
+    |
+    v
+Build Docker Images
+    |
+    v
+Push Images to Docker Hub
+    |
+    v
+Update Kubernetes Manifests
+    |
+    v
+Argo CD Detects Git Changes
+    |
+    v
+Real-Time Continuous Deployment
+    |
+    v
+Kubernetes Cluster on kind or EKS
+    |
+    v
+Secure Application Deployment
+    |-- RBAC and ServiceAccounts
+    |-- NetworkPolicies
+    |-- Non-root containers
+    |-- RollingUpdate strategy
+    |
+    v
+Monitoring & Security Observability
+    |-- Prometheus
+    |-- Grafana
+    |-- Alertmanager
+    |-- Falco runtime security
+```
+
+The project now includes the portfolio-grade DevOps upgrades most interviewers expect to see around a Kubernetes app:
 
 ```text
 Terraform
@@ -31,15 +81,29 @@ Docker Hub
 Argo CD
     |
     v
-Kubernetes Cluster
+Kubernetes Cluster (kind or EKS)
     |
     v
-Prometheus + Grafana
+Prometheus + Grafana + Falco + Alerts
 ```
+
+### Roadmap status
+
+| Phase | Status | Project assets |
+|---|---|---|
+| 1. Core DevOps | Done | Docker, Docker Compose, GitHub Actions, Docker Hub, Kubernetes, kind |
+| 2. Infrastructure automation | Added | Terraform AWS VPC, EC2, IAM, Security Groups, optional EKS |
+| 3. Kubernetes production upgrade | Added | NGINX Ingress manifest, HPA, RollingUpdate |
+| 4. GitOps deployment | Added | Argo CD AppProject and Applications |
+| 5. Real-time deployment | Added | CI image push, manifest tag bump, Argo CD auto-sync |
+| 6. Monitoring | Added | Prometheus, Grafana, Node Exporter, API `/metrics` |
+| 7. DevSecOps | Added | SonarQube, GitLeaks, Trivy |
+| 8. Kubernetes security | Added | ServiceAccounts, non-root containers, NetworkPolicies, Pod Security labels |
+| 9. Alerts and runtime security | Added | Alertmanager and Falco |
 
 ### Terraform infrastructure
 
-Terraform lives in [`terraform/aws`](terraform/aws). It provisions VPC, public subnet, internet gateway, route table, security group, IAM role, instance profile, and an EC2 instance prepared for Docker Compose deployments.
+Terraform lives in [`terraform/aws`](terraform/aws). It provisions VPC, subnets, internet gateway, route table, security group, IAM role, instance profile, an EC2 instance prepared for Docker Compose deployments, and an optional EKS cluster with managed worker nodes.
 
 ```bash
 cd terraform/aws
@@ -56,7 +120,7 @@ Resume point:
 
 ### Prometheus + Grafana monitoring
 
-Monitoring manifests live in [`k8s/monitoring`](k8s/monitoring). They install Prometheus, Grafana, and Node Exporter, and the Go backend exposes `/metrics` for API observability.
+Monitoring manifests live in [`k8s/monitoring`](k8s/monitoring). They install Prometheus, Grafana, Node Exporter, Alertmanager, and alert rules. The Go backend exposes `/metrics` for API observability.
 
 ```bash
 make monitoring
@@ -66,6 +130,7 @@ With the provided kind port mappings:
 
 ```text
 Prometheus: http://localhost:9090
+Alertmanager: http://localhost:9093
 Grafana:    http://localhost:3000
 ```
 
@@ -77,7 +142,7 @@ Resume point:
 
 ### Argo CD GitOps
 
-Argo CD manifests live in [`k8s/argocd`](k8s/argocd). They currently point at this repository's GitHub remote. If you fork the project, update `repoURL` in the two Application files, then install Argo CD and apply the GitOps apps:
+Argo CD manifests live in [`k8s/argocd`](k8s/argocd). They currently point at this repository's GitHub remote. If you fork the project, update `repoURL` in the Application files, then install Argo CD and apply the GitOps apps:
 
 ```bash
 make argocd-install
@@ -92,6 +157,28 @@ Resume point:
 > Implemented GitOps-based Kubernetes deployment using Argo CD with automated synchronization and rollback capabilities.
 
 Full upgrade notes are in [`docs/production-devops-upgrade.md`](docs/production-devops-upgrade.md).
+
+### DevSecOps pipeline
+
+The CI workflow runs security checks before image push:
+
+- GitLeaks scans for committed secrets.
+- SonarQube runs SAST when `SONAR_ENABLED=true`.
+- Trivy scans the repository, Kubernetes/Terraform config, and built container images.
+
+Required/optional CI settings:
+
+| Name | Type | Used for |
+|---|---|---|
+| `DOCKERHUB_USERNAME` | Secret | Docker image tags and registry login |
+| `DOCKERHUB_TOKEN` | Secret | Docker Hub push |
+| `DEPLOY_ENABLED` | Variable | Enables registry push and CD workflows |
+| `SONAR_ENABLED` | Variable | Enables SonarQube scan when set to `true` |
+| `SONAR_HOST_URL` | Variable | SonarQube server URL |
+| `SONAR_TOKEN` | Secret | SonarQube authentication |
+| `AWS_ACCESS_KEY_ID` | Secret | Optional Terraform plan job |
+| `AWS_SECRET_ACCESS_KEY` | Secret | Optional Terraform plan job |
+| `TERRAFORM_PLAN_ENABLED` | Variable | Enables Terraform plan in GitHub Actions |
 
 ---
 
@@ -248,6 +335,7 @@ DELETE /api/skills/:id          delete skill (cascades logs)
 POST   /api/skills/:id/log      log a study session
 GET    /api/dashboard           summary counters
 GET    /health                  DB ping for healthchecks
+GET    /metrics                 Prometheus-format API metrics
 ```
 
 ---
@@ -351,10 +439,14 @@ k8s/
 | Command | What it does |
 |---|---|
 | `make status` | One-screen view of pods, services, endpoints |
+| `make enterprise-up` | Start local app plus security, monitoring, Falco, and Argo CD |
 | `make logs` | Tail all three workloads at once |
 | `make mysql` | Open a `mysql` shell in the StatefulSet pod |
 | `make restart` | Roll backend + frontend (e.g. after pushing a new image) |
 | `make monitoring` | Install Prometheus, Grafana, and Node Exporter |
+| `make security` | Apply Kubernetes NetworkPolicies |
+| `make production` | Apply raw Ingress and HPA add-ons |
+| `make falco` | Install Falco runtime security |
 | `make argocd-install` | Install Argo CD |
 | `make argocd-apps` | Apply the Argo CD project and Applications |
 | `make terraform-validate` | Format-check and validate Terraform |
@@ -386,7 +478,7 @@ This is the **kind chapter** — same app, real Kubernetes primitives, but limit
 
 ## Continuous deployment to the kind cluster
 
-The Kubernetes CD path is now GitOps-based. GitHub Actions still cannot reach your laptop's kind cluster directly, so it does not run `kubectl apply`. Instead, CI publishes images, `cd-k8s.yml` commits the new image tags into Git, and Argo CD running inside the cluster pulls that desired state.
+The Kubernetes CD path is GitOps-based. GitHub Actions does not run `kubectl apply`. Instead, CI runs security checks, publishes images, `cd-k8s.yml` commits the new image tags into raw Kubernetes manifests and Helm values, and Argo CD running inside the cluster pulls that desired state.
 
 ```
 git push to main
@@ -413,9 +505,9 @@ kind nodes pull the new :<sha> from Docker Hub → rolling update
    | `DOCKERHUB_TOKEN` | a Docker Hub Personal Access Token with Read & Write scope |
 
 3. **Set the repo variable** `DEPLOY_ENABLED = "true"` (`Settings → Variables → Actions`). Until this is `true`, CI builds without pushing and both CD workflows skip cleanly — the "dry run" state.
-4. **Push any code change** (not a `.md`, not under `k8s/` or `docs/` — those are deliberately ignored by CI). Watch the Actions tab:
-   - **CI** builds + pushes both images to Docker Hub.
-   - **CD (kind cluster — manifest bump)** commits a `deploy: pin backend+frontend to <sha>` change to main.
+4. **Push any code change** (not a `.md`, not under `k8s/`, `terraform/`, or `docs/` because those are deliberately ignored by CI). Watch the Actions tab:
+   - **CI** runs GitLeaks, optional SonarQube, Trivy, builds both images, scans both images, and pushes to Docker Hub.
+   - **CD (GitOps manifest bump)** commits a `deploy: pin backend+frontend to <sha>` change to main.
 5. **Install Argo CD once**, on the laptop with the kind cluster:
    ```bash
    make argocd-install
@@ -457,11 +549,17 @@ mysql/init.sql          schema + seed data, mounted into the MySQL container
 k8s/                    Kubernetes app manifests
   monitoring/           Prometheus, Grafana, Node Exporter
   argocd/               Argo CD GitOps project and Applications
+  production/           Ingress and HPA add-ons
+  security/             NetworkPolicies
+  runtime-security/     Falco runtime detection
 
-terraform/aws/          AWS IaC: VPC, subnet, SG, IAM, EC2
+terraform/aws/          AWS IaC: VPC, subnets, SG, IAM, EC2, optional EKS
 
 docker-compose.yml      three services: db, backend, frontend
 .env.example            copy to .env
+.gitleaks.toml          GitLeaks secret scan allowlist/config
+.trivyignore            Trivy ignore file for demo-only findings
+sonar-project.properties SonarQube project config
 
 .github/workflows/
   ci.yml                build + push images on every main push
@@ -481,11 +579,11 @@ This project now has both learning paths:
 
 Good next upgrades:
 
-- Replace NodePort with Ingress and TLS.
-- Move MySQL to RDS for the AWS deployment.
-- Add External Secrets for database and Grafana credentials.
-- Add alerting rules and notification routing for Prometheus.
-- Split Kubernetes manifests into Kustomize overlays for dev, staging, and production.
+- Replace demo MySQL with RDS in the EKS path.
+- Add cert-manager and real TLS certificates for Ingress.
+- Replace demo Kubernetes Secrets with External Secrets and AWS Secrets Manager.
+- Route Alertmanager to real Slack/email/incident channels.
+- Add kube-state-metrics for richer pod crash and deployment alerts.
 
 ---
 

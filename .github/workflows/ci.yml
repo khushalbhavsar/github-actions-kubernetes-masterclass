@@ -10,12 +10,86 @@ on:
       - '**/*.md'
 
 jobs:
+  code-quality-security:
+    name: Code Quality & Security Checks
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: GitLeaks secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+
+      - name: SonarQube SAST scan
+        if: ${{ vars.SONAR_ENABLED == 'true' }}
+        uses: SonarSource/sonarqube-scan-action@v5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,misconfig
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
+
+      - name: Trivy Kubernetes and Terraform config scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: config
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          exit-code: "0"
+
   build-and-push:
+    name: Build, Scan, and Push Images
+    needs: code-quality-security
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - uses: docker/setup-buildx-action@v4
+
+      - name: Build backend image for security scan
+        uses: docker/build-push-action@v7
+        with:
+          context: ./backend
+          load: true
+          tags: skillpulse-backend:${{ github.sha }}
+
+      - name: Trivy backend image scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: skillpulse-backend:${{ github.sha }}
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
+
+      - name: Build frontend image for security scan
+        uses: docker/build-push-action@v7
+        with:
+          context: ./frontend
+          load: true
+          tags: skillpulse-frontend:${{ github.sha }}
+
+      - name: Trivy frontend image scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: skillpulse-frontend:${{ github.sha }}
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
 
       - uses: docker/login-action@v4
         if: ${{ vars.DEPLOY_ENABLED == 'true' }}
