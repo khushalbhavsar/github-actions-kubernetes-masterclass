@@ -77,3 +77,45 @@ variable "extra_tags" {
   default     = {}
 }
 
+variable "enable_eks" {
+  description = "Create an EKS cluster and managed node group when true."
+  type        = bool
+  default     = false
+}
+
+variable "eks_cluster_version" {
+  description = "Kubernetes version for the EKS control plane."
+  type        = string
+  default     = "1.31"
+}
+
+variable "eks_public_subnet_cidrs" {
+  description = "Public subnet CIDRs used by EKS and AWS load balancers."
+  type        = list(string)
+  default     = ["10.42.11.0/24", "10.42.12.0/24"]
+}
+
+variable "eks_node_instance_types" {
+  description = "EC2 instance types used by the EKS managed node group."
+  type        = list(string)
+  default     = ["t3.medium"]
+}
+
+variable "eks_node_desired_size" {
+  description = "Desired worker node count for the EKS managed node group."
+  type        = number
+  default     = 2
+}
+
+variable "eks_node_min_size" {
+  description = "Minimum worker node count for the EKS managed node group."
+  type        = number
+  default     = 1
+}
+
+variable "eks_node_max_size" {
+  description = "Maximum worker node count for the EKS managed node group."
+  type        = number
+  default     = 4
+}
+

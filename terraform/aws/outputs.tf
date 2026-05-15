@@ -38,3 +38,18 @@ output "ssh_command" {
   value       = "ssh ubuntu@${aws_instance.app.public_ip}"
 }
 
+output "eks_cluster_name" {
+  description = "EKS cluster name when enable_eks is true."
+  value       = var.enable_eks ? aws_eks_cluster.this[0].name : null
+}
+
+output "eks_cluster_endpoint" {
+  description = "EKS API endpoint when enable_eks is true."
+  value       = var.enable_eks ? aws_eks_cluster.this[0].endpoint : null
+}
+
+output "eks_update_kubeconfig_command" {
+  description = "AWS CLI command to configure kubectl for EKS."
+  value       = var.enable_eks ? "aws eks update-kubeconfig --region ${var.aws_region} --name ${aws_eks_cluster.this[0].name}" : null
+}
+

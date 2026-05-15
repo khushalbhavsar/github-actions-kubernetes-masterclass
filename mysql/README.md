@@ -1,5 +1,9 @@
 # SkillPulse Database - MariaDB Schema
 
+## DevOps Flow Note
+
+The current enterprise DevOps flow is documented in `../README.md` and `../docs/production-devops-upgrade.md`. This database folder remains focused on schema design and migration guidance. In the Kubernetes/EKS path, the app can run with the demo MySQL StatefulSet or be upgraded to an external managed database such as Amazon RDS.
+
 ## 📚 Overview
 
 This directory contains the complete database schema, documentation, and integration guides for the SkillPulse application using MariaDB/MySQL.

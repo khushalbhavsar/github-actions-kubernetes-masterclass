@@ -89,6 +89,12 @@ spec:
       labels:
         app: mysql
     spec:
+      serviceAccountName: mysql
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
       containers:
         - name: mysql
           image: mysql:8.4
@@ -96,6 +102,8 @@ spec:
           ports:
             - name: mysql
               containerPort: 3306
+          securityContext:
+            allowPrivilegeEscalation: false
           envFrom:
             - secretRef:
                 name: skillpulse-db

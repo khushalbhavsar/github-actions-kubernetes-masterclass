@@ -9,11 +9,14 @@ RUN go mod tidy && CGO_ENABLED=0 GOOS=linux go build -o skillpulse .
 # Stage 2: Run
 FROM alpine:3.23
 
-RUN apk --no-cache add ca-certificates
+RUN apk --no-cache add ca-certificates && adduser -D -u 10001 skillpulse
 
 WORKDIR /app
 
 COPY --from=builder /app/skillpulse .
+RUN chown -R skillpulse:skillpulse /app
+
+USER skillpulse
 
 EXPOSE 8080
 

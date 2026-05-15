@@ -13,7 +13,7 @@ spec:
   ports:
     - name: http
       port: 80
-      targetPort: 80
+      targetPort: 8080
       nodePort: 30080
 ---
 apiVersion: apps/v1
@@ -22,7 +22,12 @@ metadata:
   name: frontend
   namespace: skillpulse
 spec:
-  replicas: 1
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       app: frontend
@@ -31,13 +36,21 @@ spec:
       labels:
         app: frontend
     spec:
+      serviceAccountName: frontend
       containers:
         - name: frontend
           image: trainwithshubham/skillpulse-frontend:latest
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
-              containerPort: 80
+              containerPort: 8080
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 101
+            runAsGroup: 101
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           resources:
             requests:
               cpu: 50m
@@ -47,12 +60,12 @@ spec:
           livenessProbe:
             httpGet:
               path: /
-              port: 80
+              port: 8080
             initialDelaySeconds: 5
             periodSeconds: 10
           readinessProbe:
             httpGet:
               path: /
-              port: 80
+              port: 8080
             initialDelaySeconds: 2
             periodSeconds: 5

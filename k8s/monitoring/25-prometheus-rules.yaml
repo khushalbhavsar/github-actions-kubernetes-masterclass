@@ -1,0 +1,40 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-alert-rules
+  namespace: monitoring
+data:
+  skillpulse-alerts.yaml: |
+    groups:
+      - name: skillpulse.rules
+        rules:
+          - alert: SkillPulseTargetDown
+            expr: up{namespace="skillpulse"} == 0
+            for: 2m
+            labels:
+              severity: critical
+            annotations:
+              summary: "SkillPulse target is down"
+              description: "Prometheus cannot scrape {{ $labels.pod }} in namespace {{ $labels.namespace }}."
+
+          - alert: SkillPulseHighApiLatency
+            expr: |
+              sum(rate(skillpulse_http_request_duration_seconds_sum[5m]))
+              /
+              sum(rate(skillpulse_http_request_duration_seconds_count[5m])) > 1
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "SkillPulse API latency is high"
+              description: "Average API latency has been above 1 second for 5 minutes."
+
+          - alert: NodeExporterDown
+            expr: up{job="node-exporter"} == 0
+            for: 2m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Node Exporter is down"
+              description: "Node Exporter scrape failed for {{ $labels.instance }}."
+

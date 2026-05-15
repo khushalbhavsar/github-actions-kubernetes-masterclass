@@ -21,7 +21,12 @@ metadata:
   name: backend
   namespace: skillpulse
 spec:
-  replicas: 1
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       app: backend
@@ -34,6 +39,7 @@ spec:
         prometheus.io/path: "/metrics"
         prometheus.io/port: "8080"
     spec:
+      serviceAccountName: backend
       containers:
         - name: backend
           image: trainwithshubham/skillpulse-backend:latest
@@ -41,6 +47,14 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           env:
             - name: DB_HOST
               value: mysql

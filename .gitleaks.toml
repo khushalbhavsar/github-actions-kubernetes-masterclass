@@ -1,0 +1,24 @@
+title = "SkillPulse GitLeaks configuration"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Demo credentials intentionally used in local-only training manifests"
+paths = [
+  '''^\.env\.example$''',
+  '''^k8s/10-mysql\.yaml$''',
+  '''^k8s/monitoring/50-alertmanager\.yaml$''',
+  '''^Makefile$''',
+  '''^README\.md$''',
+  '''^docs/.*\.md$''',
+  '''^mysql/.*\.md$''',
+  '''^mysql/.*\.sql$'''
+]
+regexes = [
+  '''rootpassword123''',
+  '''skillpulse123''',
+  '''admin123''',
+  '''REPLACE_ME''',
+  '''REPLACE_WITH_SLACK_WEBHOOK_URL'''
+]

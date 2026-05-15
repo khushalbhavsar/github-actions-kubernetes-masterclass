@@ -1,0 +1,120 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: alertmanager-notification-placeholders
+  namespace: monitoring
+type: Opaque
+stringData:
+  slack-webhook-url: "REPLACE_WITH_SLACK_WEBHOOK_URL"
+  smtp-password: "REPLACE_ME"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-config
+  namespace: monitoring
+data:
+  alertmanager.yml: |
+    global:
+      resolve_timeout: 5m
+
+    route:
+      receiver: default-notifications
+      group_by: ["alertname", "namespace"]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+
+    receivers:
+      - name: default-notifications
+        webhook_configs:
+          - url: http://example-alert-webhook.monitoring.svc.cluster.local/alerts
+            send_resolved: true
+        # Replace the webhook above with a real Slack or email receiver before production use.
+        # Slack example:
+        # slack_configs:
+        #   - api_url: REPLACE_WITH_SLACK_WEBHOOK_URL
+        #     channel: "#devops-alerts"
+        #     send_resolved: true
+        # Email example:
+        # email_configs:
+        #   - to: devops@example.com
+        #     from: alertmanager@example.com
+        #     smarthost: smtp.example.com:587
+        #     auth_username: alertmanager@example.com
+        #     auth_password: REPLACE_ME
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alertmanager
+  namespace: monitoring
+  labels:
+    app: alertmanager
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: alertmanager
+  template:
+    metadata:
+      labels:
+        app: alertmanager
+    spec:
+      containers:
+        - name: alertmanager
+          image: prom/alertmanager:v0.27.0
+          imagePullPolicy: IfNotPresent
+          args:
+            - --config.file=/etc/alertmanager/alertmanager.yml
+            - --storage.path=/alertmanager
+          ports:
+            - name: http
+              containerPort: 9093
+          volumeMounts:
+            - name: config
+              mountPath: /etc/alertmanager
+              readOnly: true
+            - name: data
+              mountPath: /alertmanager
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 128Mi
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: 9093
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /-/healthy
+              port: 9093
+            initialDelaySeconds: 15
+            periodSeconds: 10
+      volumes:
+        - name: config
+          configMap:
+            name: alertmanager-config
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alertmanager
+  namespace: monitoring
+  labels:
+    app: alertmanager
+spec:
+  type: NodePort
+  selector:
+    app: alertmanager
+  ports:
+    - name: http
+      port: 9093
+      targetPort: 9093
+      nodePort: 30093
