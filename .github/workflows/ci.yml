@@ -35,7 +35,7 @@ jobs:
           SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
 
       - name: Trivy filesystem scan
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: .
@@ -45,7 +45,7 @@ jobs:
           ignore-unfixed: true
 
       - name: Trivy Kubernetes and Terraform config scan
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: config
           scan-ref: .
@@ -69,7 +69,7 @@ jobs:
           tags: skillpulse-backend:${{ github.sha }}
 
       - name: Trivy backend image scan
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: skillpulse-backend:${{ github.sha }}
           severity: HIGH,CRITICAL
@@ -84,7 +84,7 @@ jobs:
           tags: skillpulse-frontend:${{ github.sha }}
 
       - name: Trivy frontend image scan
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: skillpulse-frontend:${{ github.sha }}
           severity: HIGH,CRITICAL
