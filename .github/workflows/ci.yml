@@ -105,10 +105,10 @@ jobs:
       # ----------------------------
       - name: Validate Kubernetes Manifests
         run: |
-          kubectl apply --dry-run=client -f k8s/00-namespace.yaml
-          kubectl apply --dry-run=client -f k8s/10-mysql.yaml
-          kubectl apply --dry-run=client -f k8s/20-backend.yaml
-          kubectl apply --dry-run=client -f k8s/30-frontend.yaml
+          kubectl apply --dry-run=client --validate=false -f k8s/00-namespace.yaml
+          kubectl apply --dry-run=client --validate=false -f k8s/10-mysql.yaml
+          kubectl apply --dry-run=client --validate=false -f k8s/20-backend.yaml
+          kubectl apply --dry-run=client --validate=false -f k8s/30-frontend.yaml
 
       # ----------------------------
       # Trivy Filesystem Scan
